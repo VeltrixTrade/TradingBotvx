@@ -578,7 +578,10 @@ async function loadSmartSignals() {
             if (sig.liquidityPools && sig.liquidityPools.length > 0) {
                 liqHtml += `<div class="liquidity-alerts-box"><span class="confluence-title">تنبيهات السيولة:</span>`;
                 sig.liquidityPools.forEach(pool => {
-                    liqHtml += `<div class="liquidity-alert-item">${pool.description} عند ${pool.level.toFixed(5)}</div>`;
+                    const levelVal = Number(pool.level);
+                    const decimals = sig.instrument.includes('JPY') ? 3 : (sig.instrument.includes('XAU') ? 2 : 5);
+                    const formattedLevel = isNaN(levelVal) ? '--' : levelVal.toFixed(decimals);
+                    liqHtml += `<div class="liquidity-alert-item">${pool.description} عند ${formattedLevel}</div>`;
                 });
                 liqHtml += `</div>`;
             }

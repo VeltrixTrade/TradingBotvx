@@ -896,7 +896,7 @@ function generateSignal(instrument, candles, htfStructure) {
     const score = direction === 'buy' ? confluenceScore : bearishScore;
     const reasons = direction === 'buy' ? confluence : bearishConfluence;
 
-    if (score < 3) return null;
+    if (score < 1) return null;
 
     let entryPrice, stopLoss, takeProfit, orderType, entryReason;
 
@@ -945,7 +945,8 @@ function generateSignal(instrument, candles, htfStructure) {
     let strength;
     if (score >= 6) strength = 'قوية جداً';
     else if (score >= 4) strength = 'قوية';
-    else strength = 'متوسطة';
+    else if (score >= 2) strength = 'متوسطة';
+    else strength = 'معتدلة';
 
     const decimals = isJPY ? 3 : (isXAU ? 2 : 5);
 
