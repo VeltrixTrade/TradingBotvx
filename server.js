@@ -113,15 +113,112 @@ app.get('/api/instruments', async (req, res) => {
     }
 });
 
+// ========== Yahoo Finance Configuration & Mapping ==========
+const YAHOO_MAPPING = {
+    'EUR_USD': 'EURUSD=X',
+    'GBP_USD': 'GBPUSD=X',
+    'USD_JPY': 'USDJPY=X',
+    'AUD_USD': 'AUDUSD=X',
+    'USD_CAD': 'USDCAD=X',
+    'USD_CHF': 'USDCHF=X',
+    'XAU_USD': 'GC=F'
+};
+
+async function fetchYahooPrice(instrument) {
+    const yahooSymbol = YAHOO_MAPPING[instrument] || `${instrument.replace('_', '')}=X`;
+    const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${yahooSymbol}`;
+    const response = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' } });
+    if (!response.ok) throw new Error('Yahoo Finance price fetch failed');
+    const data = await response.json();
+    const result = data.quoteResponse?.result?.[0];
+    if (!result) throw new Error('No price data found');
+    
+    const mid = result.regularMarketPrice;
+    // Map pip size
+    const isJPY = instrument.includes('JPY');
+    const isXAU = instrument.includes('XAU');
+    const decimals = isJPY ? 3 : (isXAU ? 2 : 5);
+    const spreadVal = isJPY ? 0.02 : (isXAU ? 0.3 : 0.00015);
+
+    const bid = mid - (spreadVal / 2);
+    const ask = mid + (spreadVal / 2);
+    
+    return {
+        instrument,
+        bids: [{ price: bid.toFixed(decimals) }],
+        asks: [{ price: ask.toFixed(decimals) }],
+        closeoutBid: bid.toFixed(decimals),
+        closeoutAsk: ask.toFixed(decimals)
+    };
+}
+
+async function fetchYahooCandles(instrument, granularity, count) {
+    const yahooSymbol = YAHOO_MAPPING[instrument] || `${instrument.replace('_', '')}=X`;
+    let interval = '1h';
+    if (granularity.startsWith('M')) interval = '15m'; // default to 15m for minutes
+    if (granularity === 'M1') interval = '1m';
+    if (granularity === 'M5') interval = '5m';
+    if (granularity === 'M15') interval = '15m';
+    if (granularity === 'M30') interval = '30m';
+    if (granularity === 'H1') interval = '1h';
+    if (granularity === 'H4') interval = '1h'; // Yahoo doesn't support 4h directly on some ranges, use 1h
+    if (granularity === 'D') interval = '1d';
+    if (granularity === 'W') interval = '1wk';
+    
+    let range = '5d';
+    if (interval === '1d' || interval === '1wk') range = '1mo';
+    if (interval === '1m') range = '1d';
+
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?interval=${interval}&range=${range}`;
+    const response = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' } });
+    if (!response.ok) return [];
+    const data = await response.json();
+    const result = data.chart?.result?.[0];
+    if (!result) return [];
+    
+    const timestamps = result.timestamp || [];
+    const indicators = result.indicators?.quote?.[0] || {};
+    const opens = indicators.open || [];
+    const highs = indicators.high || [];
+    const lows = indicators.low || [];
+    const closes = indicators.close || [];
+    
+    const candles = [];
+    for (let i = 0; i < timestamps.length; i++) {
+        if (opens[i] !== null && highs[i] !== null && lows[i] !== null && closes[i] !== null) {
+            candles.push({
+                time: new Date(timestamps[i] * 1000).toISOString(),
+                open: opens[i],
+                high: highs[i],
+                low: lows[i],
+                close: closes[i],
+                volume: indicators.volume?.[i] || 0
+            });
+        }
+    }
+    return candles.slice(-count);
+}
+
 // ========== API: OANDA Pricing ==========
 app.get('/api/pricing', async (req, res) => {
-    if (!OANDA_API_KEY || !OANDA_ACCOUNT_ID) {
-        return res.status(400).json({ error: 'لم يتم إعداد حساب OANDA على الخادم' });
-    }
-
     const { instruments } = req.query;
     if (!instruments) {
         return res.status(400).json({ error: 'يرجى تحديد أزواج العملات المطلوبة' });
+    }
+
+    // Fallback to Yahoo Finance if OANDA is not configured
+    if (!OANDA_API_KEY || !OANDA_ACCOUNT_ID) {
+        try {
+            const list = instruments.split(',');
+            const prices = [];
+            for (const inst of list) {
+                const price = await fetchYahooPrice(inst.trim());
+                prices.push(price);
+            }
+            return res.json(prices);
+        } catch (err) {
+            return res.status(500).json({ error: 'حدث خطأ أثناء جلب الأسعار البديلة من Yahoo Finance' });
+        }
     }
 
     try {
@@ -144,6 +241,18 @@ app.get('/api/candles', async (req, res) => {
     const { instrument, granularity, count } = req.query;
     if (!instrument) {
         return res.status(400).json({ error: 'يرجى تحديد زوج العملة' });
+    }
+
+    // Fallback to Yahoo Finance if OANDA is not configured
+    if (!OANDA_API_KEY || !OANDA_ACCOUNT_ID) {
+        try {
+            const g = granularity || 'H1';
+            const c = count || '100';
+            const candles = await fetchYahooCandles(instrument, g, parseInt(c));
+            return res.json(candles);
+        } catch (err) {
+            return res.status(500).json({ error: 'حدث خطأ أثناء جلب شموع بديلة من Yahoo Finance' });
+        }
     }
 
     try {
