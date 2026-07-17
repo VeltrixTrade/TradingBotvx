@@ -127,30 +127,22 @@ function setupEventListeners() {
     });
 }
 
-// ========== OANDA Connection & Status ==========
+// ========== Trading Simulator Connection & Status ==========
 async function checkOandaStatus() {
     try {
-        const response = await fetch('/api/oanda/status');
-        const data = await response.json();
         const indicator = document.getElementById('oandaStatusIndicator');
         const text = document.getElementById('oandaStatusText');
 
-        if (data.configured) {
-            indicator.className = 'status-indicator connected';
-            text.textContent = `متصل بـ OANDA (${data.environment === 'live' ? 'حقيقي' : 'تجريبي'})`;
-            
-            // Initial data loads
-            refreshAccountInfo();
-            refreshOpenTrades();
-            refreshPendingOrders();
-            fetchPrices();
-        } else {
-            indicator.className = 'status-indicator disconnected';
-            text.textContent = 'OANDA غير متصل (اضف المفتاح)';
-            showToast('يرجى إضافة متغيرات OANDA البيئية في Railway لتفعيل التداول الحقيقي/التجريبي', 'error');
-        }
+        indicator.className = 'status-indicator connected';
+        text.textContent = 'محاكي التداول نشط (TradingView Feed)';
+        
+        // Initial data loads
+        refreshAccountInfo();
+        refreshOpenTrades();
+        refreshPendingOrders();
+        fetchPrices();
     } catch (error) {
-        console.error('OANDA status check failed:', error);
+        console.error('Simulator status check failed:', error);
     }
 }
 

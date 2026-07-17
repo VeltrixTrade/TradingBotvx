@@ -9,109 +9,15 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ========== OANDA API Configuration ==========
-const OANDA_API_KEY = process.env.OANDA_API_KEY || '';
-const OANDA_ACCOUNT_ID = process.env.OANDA_ACCOUNT_ID || '';
-const OANDA_ENVIRONMENT = process.env.OANDA_ENVIRONMENT || 'practice';
+// ========== Simulated Database ==========
+let balance = 10000.00;
+let openTrades = [];
+let pendingOrders = [];
+let closedTrades = [];
+let tradeIdCounter = 1001;
+let orderIdCounter = 5001;
 
-const OANDA_BASE_URL = OANDA_ENVIRONMENT === 'live' 
-    ? 'https://api-fxtrade.oanda.com' 
-    : 'https://api-fxpractice.oanda.com';
-
-function getOandaHeaders() {
-    return {
-        'Authorization': `Bearer ${OANDA_API_KEY}`,
-        'Content-Type': 'application/json'
-    };
-}
-
-// ========== OANDA Helpers & Error Handling ==========
-function handleOandaError(response, errorData) {
-    const status = response.status;
-    const errorCode = errorData?.errorCode;
-    const errorMessage = errorData?.errorMessage || '';
-
-    console.error(`OANDA API Error [${status}]: ${errorCode} - ${errorMessage}`);
-
-    if (status === 401) {
-        return 'مفتاح OANDA API غير صالح أو غير مفعّل.';
-    }
-    if (status === 404) {
-        return 'رقم حساب OANDA غير موجود.';
-    }
-    if (status === 400 && (errorCode === 'INSUFFICIENT_MARGIN' || errorMessage.includes('margin') || errorMessage.includes('balance'))) {
-        return 'الهامش المتاح في حسابك غير كافٍ لفتح هذه الصفقة.';
-    }
-    return errorMessage || `خطأ في الاتصال بـ OANDA (${status})`;
-}
-
-// ========== AI Keys from Environment Variables ==========
-function getApiKeys() {
-    return {
-        openai: process.env.OPENAI_API_KEY || '',
-        gemini: process.env.GEMINI_API_KEY || '',
-        deepseek: process.env.DEEPSEEK_API_KEY || '',
-    };
-}
-
-function getModels() {
-    return {
-        openai: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-        gemini: process.env.GEMINI_MODEL || 'gemini-2.0-flash',
-        deepseek: process.env.DEEPSEEK_MODEL || 'deepseek-chat',
-    };
-}
-
-// ========== API: OANDA Status ==========
-app.get('/api/oanda/status', (req, res) => {
-    res.json({
-        configured: !!(OANDA_API_KEY && OANDA_ACCOUNT_ID),
-        environment: OANDA_ENVIRONMENT,
-        accountId: OANDA_ACCOUNT_ID ? `***-${OANDA_ACCOUNT_ID.split('-').pop()}` : ''
-    });
-});
-
-// ========== API: OANDA Account Info ==========
-app.get('/api/account', async (req, res) => {
-    if (!OANDA_API_KEY || !OANDA_ACCOUNT_ID) {
-        return res.status(400).json({ error: 'لم يتم إعداد حساب OANDA على الخادم' });
-    }
-
-    try {
-        const url = `${OANDA_BASE_URL}/v3/accounts/${OANDA_ACCOUNT_ID}/summary`;
-        const response = await fetch(url, { headers: getOandaHeaders() });
-        const data = await response.json();
-
-        if (!response.ok) {
-            return res.status(response.status).json({ error: handleOandaError(response, data) });
-        }
-
-        res.json(data.account);
-    } catch (error) {
-        res.status(500).json({ error: 'حدث خطأ أثناء الاتصال بحساب OANDA' });
-    }
-});
-
-// ========== API: OANDA Instruments ==========
-app.get('/api/instruments', async (req, res) => {
-    if (!OANDA_API_KEY || !OANDA_ACCOUNT_ID) {
-        return res.status(400).json({ error: 'لم يتم إعداد حساب OANDA على الخادم' });
-    }
-
-    try {
-        const url = `${OANDA_BASE_URL}/v3/accounts/${OANDA_ACCOUNT_ID}/instruments`;
-        const response = await fetch(url, { headers: getOandaHeaders() });
-        const data = await response.json();
-
-        if (!response.ok) {
-            return res.status(response.status).json({ error: handleOandaError(response, data) });
-        }
-
-        res.json(data.instruments);
-    } catch (error) {
-        res.status(500).json({ error: 'حدث خطأ أثناء جلب قائمة أزواج العملات' });
-    }
-});
+const LEVERAGE = 30; // 1:30 leverage
 
 // ========== Yahoo Finance Configuration & Mapping ==========
 const YAHOO_MAPPING = {
@@ -134,7 +40,6 @@ async function fetchYahooPrice(instrument) {
     if (!result) throw new Error('No price data found');
     
     const mid = result.regularMarketPrice;
-    // Map pip size
     const isJPY = instrument.includes('JPY');
     const isXAU = instrument.includes('XAU');
     const decimals = isJPY ? 3 : (isXAU ? 2 : 5);
@@ -155,13 +60,13 @@ async function fetchYahooPrice(instrument) {
 async function fetchYahooCandles(instrument, granularity, count) {
     const yahooSymbol = YAHOO_MAPPING[instrument] || `${instrument.replace('_', '')}=X`;
     let interval = '1h';
-    if (granularity.startsWith('M')) interval = '15m'; // default to 15m for minutes
+    if (granularity.startsWith('M')) interval = '15m';
     if (granularity === 'M1') interval = '1m';
     if (granularity === 'M5') interval = '5m';
     if (granularity === 'M15') interval = '15m';
     if (granularity === 'M30') interval = '30m';
     if (granularity === 'H1') interval = '1h';
-    if (granularity === 'H4') interval = '1h'; // Yahoo doesn't support 4h directly on some ranges, use 1h
+    if (granularity === 'H4') interval = '1h';
     if (granularity === 'D') interval = '1d';
     if (granularity === 'W') interval = '1wk';
     
@@ -199,85 +104,228 @@ async function fetchYahooCandles(instrument, granularity, count) {
     return candles.slice(-count);
 }
 
-// ========== API: OANDA Pricing ==========
+// ========== Check Pending Orders & Trigger Sim Trades ==========
+async function updateSimulatedTradesAndOrders() {
+    try {
+        if (openTrades.length === 0 && pendingOrders.length === 0) return;
+
+        // Fetch prices for all unique instruments
+        const uniqueInstruments = [...new Set([
+            ...openTrades.map(t => t.instrument),
+            ...pendingOrders.map(o => o.instrument)
+        ])];
+
+        const prices = {};
+        for (const inst of uniqueInstruments) {
+            const p = await fetchYahooPrice(inst);
+            prices[inst] = {
+                bid: parseFloat(p.closeoutBid),
+                ask: parseFloat(p.closeoutAsk)
+            };
+        }
+
+        // 1. Process Pending Orders (Limit / Stop)
+        for (let i = pendingOrders.length - 1; i >= 0; i--) {
+            const o = pendingOrders[i];
+            const p = prices[o.instrument];
+            if (!p) continue;
+
+            const targetPrice = parseFloat(o.price);
+            const units = parseInt(o.units);
+            const isBuy = units > 0;
+            const currentPrice = isBuy ? p.ask : p.bid;
+
+            let trigger = false;
+
+            if (o.type === 'LIMIT') {
+                if (isBuy && currentPrice <= targetPrice) trigger = true;
+                if (!isBuy && currentPrice >= targetPrice) trigger = true;
+            } else if (o.type === 'STOP') {
+                if (isBuy && currentPrice >= targetPrice) trigger = true;
+                if (!isBuy && currentPrice <= targetPrice) trigger = true;
+            }
+
+            if (trigger) {
+                // Remove from pending
+                pendingOrders.splice(i, 1);
+                // Create open trade
+                const trade = {
+                    id: o.id.toString(),
+                    instrument: o.instrument,
+                    price: currentPrice.toString(),
+                    initialUnits: o.units.toString(),
+                    currentUnits: o.units.toString(),
+                    state: 'OPEN',
+                    openTime: new Date().toISOString(),
+                    stopLossOnFill: o.stopLossOnFill,
+                    takeProfitOnFill: o.takeProfitOnFill,
+                    unrealizedPL: '0.00'
+                };
+                openTrades.push(trade);
+            }
+        }
+
+        // 2. Update Unrealized PL & check SL/TP for open trades
+        for (let i = openTrades.length - 1; i >= 0; i--) {
+            const t = openTrades[i];
+            const p = prices[t.instrument];
+            if (!p) continue;
+
+            const entry = parseFloat(t.price);
+            const units = parseInt(t.currentUnits);
+            const isBuy = units > 0;
+            const currentPrice = isBuy ? p.bid : p.ask;
+
+            // Calculate profit
+            const diff = isBuy ? (currentPrice - entry) : (entry - currentPrice);
+            const pl = diff * Math.abs(units);
+            t.unrealizedPL = pl.toFixed(2);
+
+            // Check Stop Loss & Take Profit
+            let closeTrade = false;
+            let closeReason = 'NORMAL';
+            let closePrice = currentPrice;
+
+            if (t.stopLossOnFill && t.stopLossOnFill.price) {
+                const sl = parseFloat(t.stopLossOnFill.price);
+                if (isBuy && currentPrice <= sl) { closeTrade = true; closeReason = 'SL'; closePrice = sl; }
+                if (!isBuy && currentPrice >= sl) { closeTrade = true; closeReason = 'SL'; closePrice = sl; }
+            }
+
+            if (t.takeProfitOnFill && t.takeProfitOnFill.price) {
+                const tp = parseFloat(t.takeProfitOnFill.price);
+                if (isBuy && currentPrice >= tp) { closeTrade = true; closeReason = 'TP'; closePrice = tp; }
+                if (!isBuy && currentPrice <= tp) { closeTrade = true; closeReason = 'TP'; closePrice = tp; }
+            }
+
+            if (closeTrade) {
+                openTrades.splice(i, 1);
+                const finalDiff = isBuy ? (closePrice - entry) : (entry - closePrice);
+                const finalPL = finalDiff * Math.abs(units);
+                balance += finalPL;
+
+                closedTrades.push({
+                    id: t.id,
+                    instrument: t.instrument,
+                    initialUnits: t.initialUnits,
+                    price: t.price,
+                    averageClosePrice: closePrice.toString(),
+                    realizedPL: finalPL.toFixed(2),
+                    closeTime: new Date().toISOString(),
+                    reason: closeReason
+                });
+            }
+        }
+
+    } catch (err) {
+        console.error('Error updating simulated database:', err);
+    }
+}
+
+// ========== AI Keys from Environment Variables ==========
+function getApiKeys() {
+    return {
+        openai: process.env.OPENAI_API_KEY || '',
+        gemini: process.env.GEMINI_API_KEY || '',
+        deepseek: process.env.DEEPSEEK_API_KEY || '',
+    };
+}
+
+function getModels() {
+    return {
+        openai: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+        gemini: process.env.GEMINI_MODEL || 'gemini-2.0-flash',
+        deepseek: process.env.DEEPSEEK_MODEL || 'deepseek-chat',
+    };
+}
+
+// ========== API: Connection Status (Static simulator) ==========
+app.get('/api/oanda/status', (req, res) => {
+    res.json({
+        configured: true,
+        environment: 'simulation',
+        accountId: 'Veltrix-Sim-100'
+    });
+});
+
+// ========== API: Account Info (Simulated) ==========
+app.get('/api/account', async (req, res) => {
+    await updateSimulatedTradesAndOrders();
+
+    let unrealizedPL = 0;
+    let marginUsed = 0;
+
+    openTrades.forEach(t => {
+        unrealizedPL += parseFloat(t.unrealizedPL);
+        // Estimate Margin requirement (1:30 leverage)
+        const size = Math.abs(parseInt(t.currentUnits)) * parseFloat(t.price);
+        marginUsed += size / LEVERAGE;
+    });
+
+    const nav = balance + unrealizedPL;
+    const marginAvailable = Math.max(0, nav - marginUsed);
+
+    res.json({
+        balance: balance.toFixed(2),
+        NAV: nav.toFixed(2),
+        unrealizedPL: unrealizedPL.toFixed(2),
+        marginUsed: marginUsed.toFixed(2),
+        marginAvailable: marginAvailable.toFixed(2)
+    });
+});
+
+// ========== API: Instruments List (Static supported pairs) ==========
+app.get('/api/instruments', (req, res) => {
+    const list = Object.keys(YAHOO_MAPPING).map(key => ({
+        name: key,
+        displayName: key.replace('_', '/')
+    }));
+    res.json(list);
+});
+
+// ========== API: Pricing (Yahoo Finance Feed) ==========
 app.get('/api/pricing', async (req, res) => {
     const { instruments } = req.query;
     if (!instruments) {
         return res.status(400).json({ error: 'يرجى تحديد أزواج العملات المطلوبة' });
     }
 
-    // Fallback to Yahoo Finance if OANDA is not configured
-    if (!OANDA_API_KEY || !OANDA_ACCOUNT_ID) {
-        try {
-            const list = instruments.split(',');
-            const prices = [];
-            for (const inst of list) {
-                const price = await fetchYahooPrice(inst.trim());
-                prices.push(price);
-            }
-            return res.json(prices);
-        } catch (err) {
-            return res.status(500).json({ error: 'حدث خطأ أثناء جلب الأسعار البديلة من Yahoo Finance' });
-        }
-    }
-
     try {
-        const url = `${OANDA_BASE_URL}/v3/accounts/${OANDA_ACCOUNT_ID}/pricing?instruments=${encodeURIComponent(instruments)}`;
-        const response = await fetch(url, { headers: getOandaHeaders() });
-        const data = await response.json();
-
-        if (!response.ok) {
-            return res.status(response.status).json({ error: handleOandaError(response, data) });
+        const list = instruments.split(',');
+        const prices = [];
+        for (const inst of list) {
+            const price = await fetchYahooPrice(inst.trim());
+            prices.push(price);
         }
+        
+        // Asynchronously execute order matching on new ticks
+        updateSimulatedTradesAndOrders();
 
-        res.json(data.prices);
-    } catch (error) {
-        res.status(500).json({ error: 'حدث خطأ أثناء جلب الأسعار الحالية' });
+        res.json(prices);
+    } catch (err) {
+        res.status(500).json({ error: 'حدث خطأ أثناء جلب الأسعار الفورية من TradingView/Yahoo' });
     }
 });
 
-// ========== API: OANDA Candles (OHLC) ==========
+// ========== API: Candles (Yahoo Finance Feed) ==========
 app.get('/api/candles', async (req, res) => {
     const { instrument, granularity, count } = req.query;
     if (!instrument) {
         return res.status(400).json({ error: 'يرجى تحديد زوج العملة' });
     }
 
-    // Fallback to Yahoo Finance if OANDA is not configured
-    if (!OANDA_API_KEY || !OANDA_ACCOUNT_ID) {
-        try {
-            const g = granularity || 'H1';
-            const c = count || '100';
-            const candles = await fetchYahooCandles(instrument, g, parseInt(c));
-            return res.json(candles);
-        } catch (err) {
-            return res.status(500).json({ error: 'حدث خطأ أثناء جلب شموع بديلة من Yahoo Finance' });
-        }
-    }
-
     try {
         const g = granularity || 'H1';
         const c = count || '100';
-        const url = `${OANDA_BASE_URL}/v3/instruments/${instrument}/candles?granularity=${g}&count=${c}&price=M`;
-        const response = await fetch(url, { headers: getOandaHeaders() });
-        const data = await response.json();
-
-        if (!response.ok) {
-            return res.status(response.status).json({ error: handleOandaError(response, data) });
-        }
-
-        res.json(data.candles);
-    } catch (error) {
+        const candles = await fetchYahooCandles(instrument, g, parseInt(c));
+        res.json(candles);
+    } catch (err) {
         res.status(500).json({ error: 'حدث خطأ أثناء جلب بيانات الشموع' });
     }
 });
 
-// ========== API: Place Order ==========
+// ========== API: Place Order (Simulated) ==========
 app.post('/api/orders', async (req, res) => {
-    if (!OANDA_API_KEY || !OANDA_ACCOUNT_ID) {
-        return res.status(400).json({ error: 'لم يتم إعداد حساب OANDA على الخادم' });
-    }
-
     const { type, instrument, units, price, stopLoss, takeProfit } = req.body;
 
     if (!type || !instrument || !units) {
@@ -285,213 +333,165 @@ app.post('/api/orders', async (req, res) => {
     }
 
     try {
-        const orderRequest = {
-            type: type.toUpperCase(),
-            instrument: instrument,
-            units: units.toString(),
-            timeInForce: type.toUpperCase() === 'MARKET' ? 'FOK' : 'GTC',
-            positionFill: 'DEFAULT'
-        };
+        const pData = await fetchYahooPrice(instrument);
+        const bid = parseFloat(pData.closeoutBid);
+        const ask = parseFloat(pData.closeoutAsk);
 
-        if (price && type.toUpperCase() !== 'MARKET') {
-            orderRequest.price = price.toString();
+        const isBuy = parseInt(units) > 0;
+        const currentPrice = isBuy ? ask : bid;
+
+        const orderType = type.toUpperCase();
+
+        if (orderType === 'MARKET') {
+            // Immediately fill market order
+            const trade = {
+                id: (tradeIdCounter++).toString(),
+                instrument: instrument,
+                price: currentPrice.toFixed(5),
+                initialUnits: units.toString(),
+                currentUnits: units.toString(),
+                state: 'OPEN',
+                openTime: new Date().toISOString(),
+                unrealizedPL: '0.00'
+            };
+
+            if (stopLoss) trade.stopLossOnFill = { price: stopLoss.toString() };
+            if (takeProfit) trade.takeProfitOnFill = { price: takeProfit.toString() };
+
+            openTrades.push(trade);
+            res.json({ orderFillTransaction: { id: trade.id } });
+        } else {
+            // Limit or Stop Order (Pending)
+            if (!price) {
+                return res.status(400).json({ error: 'السعر المطلوب غير محدد للأمر المعلق' });
+            }
+
+            const order = {
+                id: (orderIdCounter++).toString(),
+                instrument: instrument,
+                type: orderType,
+                units: units.toString(),
+                price: price.toString(),
+                state: 'PENDING'
+            };
+
+            if (stopLoss) order.stopLossOnFill = { price: stopLoss.toString() };
+            if (takeProfit) order.takeProfitOnFill = { price: takeProfit.toString() };
+
+            pendingOrders.push(order);
+            res.json({ orderCreateTransaction: { id: order.id } });
         }
 
-        if (stopLoss) {
-            orderRequest.stopLossOnFill = { price: stopLoss.toString(), timeInForce: 'GTC' };
-        }
-
-        if (takeProfit) {
-            orderRequest.takeProfitOnFill = { price: takeProfit.toString() };
-        }
-
-        const url = `${OANDA_BASE_URL}/v3/accounts/${OANDA_ACCOUNT_ID}/orders`;
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: getOandaHeaders(),
-            body: JSON.stringify({ order: orderRequest })
-        });
-        const data = await response.json();
-
-        if (!response.ok) {
-            return res.status(response.status).json({ error: handleOandaError(response, data) });
-        }
-
-        res.json(data);
-    } catch (error) {
-        res.status(500).json({ error: 'حدث خطأ أثناء تنفيذ الصفقة' });
+    } catch (err) {
+        res.status(500).json({ error: 'حدث خطأ أثناء إدراج الصفقة' });
     }
 });
 
-// ========== API: Get Open Trades ==========
+// ========== API: Get Open Trades (Simulated) ==========
 app.get('/api/trades', async (req, res) => {
-    if (!OANDA_API_KEY || !OANDA_ACCOUNT_ID) {
-        return res.status(400).json({ error: 'لم يتم إعداد حساب OANDA على الخادم' });
-    }
-
-    try {
-        const url = `${OANDA_BASE_URL}/v3/accounts/${OANDA_ACCOUNT_ID}/trades?state=OPEN`;
-        const response = await fetch(url, { headers: getOandaHeaders() });
-        const data = await response.json();
-
-        if (!response.ok) {
-            return res.status(response.status).json({ error: handleOandaError(response, data) });
-        }
-
-        res.json(data.trades);
-    } catch (error) {
-        res.status(500).json({ error: 'حدث خطأ أثناء جلب الصفقات المفتوحة' });
-    }
+    await updateSimulatedTradesAndOrders();
+    res.json(openTrades);
 });
 
-// ========== API: Close Trade ==========
+// ========== API: Close Trade (Simulated) ==========
 app.put('/api/trades/:id/close', async (req, res) => {
-    if (!OANDA_API_KEY || !OANDA_ACCOUNT_ID) {
-        return res.status(400).json({ error: 'لم يتم إعداد حساب OANDA على الخادم' });
+    const { id } = req.params;
+    const index = openTrades.findIndex(t => t.id === id);
+    if (index === -1) {
+        return res.status(404).json({ error: 'الصفقة غير موجودة' });
     }
 
-    const { id } = req.params;
-
     try {
-        const url = `${OANDA_BASE_URL}/v3/accounts/${OANDA_ACCOUNT_ID}/trades/${id}/close`;
-        const response = await fetch(url, {
-            method: 'PUT',
-            headers: getOandaHeaders(),
-            body: JSON.stringify({ units: 'ALL' })
+        const t = openTrades[index];
+        const pData = await fetchYahooPrice(t.instrument);
+        const bid = parseFloat(pData.closeoutBid);
+        const ask = parseFloat(pData.closeoutAsk);
+
+        const isBuy = parseInt(t.currentUnits) > 0;
+        const closePrice = isBuy ? bid : ask;
+
+        openTrades.splice(index, 1);
+
+        const diff = isBuy ? (closePrice - parseFloat(t.price)) : (parseFloat(t.price) - closePrice);
+        const pl = diff * Math.abs(parseInt(t.currentUnits));
+        balance += pl;
+
+        closedTrades.push({
+            id: t.id,
+            instrument: t.instrument,
+            initialUnits: t.initialUnits,
+            price: t.price,
+            averageClosePrice: closePrice.toFixed(5),
+            realizedPL: pl.toFixed(2),
+            closeTime: new Date().toISOString(),
+            reason: 'NORMAL'
         });
-        const data = await response.json();
 
-        if (!response.ok) {
-            return res.status(response.status).json({ error: handleOandaError(response, data) });
-        }
-
-        res.json(data);
-    } catch (error) {
+        res.json({ closed: true });
+    } catch (err) {
         res.status(500).json({ error: 'حدث خطأ أثناء إغلاق الصفقة' });
     }
 });
 
-// ========== API: Get Pending Orders ==========
-app.get('/api/orders', async (req, res) => {
-    if (!OANDA_API_KEY || !OANDA_ACCOUNT_ID) {
-        return res.status(400).json({ error: 'لم يتم إعداد حساب OANDA على الخادم' });
-    }
-
-    try {
-        const url = `${OANDA_BASE_URL}/v3/accounts/${OANDA_ACCOUNT_ID}/orders`;
-        const response = await fetch(url, { headers: getOandaHeaders() });
-        const data = await response.json();
-
-        if (!response.ok) {
-            return res.status(response.status).json({ error: handleOandaError(response, data) });
-        }
-
-        // Filter out trade filled/cancelled orders, only show pending ones (LIMIT, STOP, etc.)
-        const pendingOrders = data.orders.filter(o => o.state === 'PENDING');
-        res.json(pendingOrders);
-    } catch (error) {
-        res.status(500).json({ error: 'حدث خطأ أثناء جلب الأوامر المعلقة' });
-    }
+// ========== API: Get Pending Orders (Simulated) ==========
+app.get('/api/orders', (req, res) => {
+    res.json(pendingOrders);
 });
 
-// ========== API: Cancel Order ==========
-app.put('/api/orders/:id/cancel', async (req, res) => {
-    if (!OANDA_API_KEY || !OANDA_ACCOUNT_ID) {
-        return res.status(400).json({ error: 'لم يتم إعداد حساب OANDA على الخادم' });
-    }
-
+// ========== API: Cancel Order (Simulated) ==========
+app.put('/api/orders/:id/cancel', (req, res) => {
     const { id } = req.params;
-
-    try {
-        const url = `${OANDA_BASE_URL}/v3/accounts/${OANDA_ACCOUNT_ID}/orders/${id}/cancel`;
-        const response = await fetch(url, {
-            method: 'PUT',
-            headers: getOandaHeaders()
-        });
-        const data = await response.json();
-
-        if (!response.ok) {
-            return res.status(response.status).json({ error: handleOandaError(response, data) });
-        }
-
-        res.json(data);
-    } catch (error) {
-        res.status(500).json({ error: 'حدث خطأ أثناء إلغاء الأمر' });
+    const index = pendingOrders.findIndex(o => o.id === id);
+    if (index === -1) {
+        return res.status(404).json({ error: 'الأمر المعلق غير موجود' });
     }
+
+    pendingOrders.splice(index, 1);
+    res.json({ cancelled: true });
 });
 
-// ========== API: Get Positions ==========
-app.get('/api/positions', async (req, res) => {
-    if (!OANDA_API_KEY || !OANDA_ACCOUNT_ID) {
-        return res.status(400).json({ error: 'لم يتم إعداد حساب OANDA على الخادم' });
-    }
-
-    try {
-        const url = `${OANDA_BASE_URL}/v3/accounts/${OANDA_ACCOUNT_ID}/positions`;
-        const response = await fetch(url, { headers: getOandaHeaders() });
-        const data = await response.json();
-
-        if (!response.ok) {
-            return res.status(response.status).json({ error: handleOandaError(response, data) });
+// ========== API: Get Positions (Simulated) ==========
+app.get('/api/positions', (req, res) => {
+    // Return positions grouped by instrument
+    const positionsMap = {};
+    openTrades.forEach(t => {
+        if (!positionsMap[t.instrument]) {
+            positionsMap[t.instrument] = {
+                instrument: t.instrument,
+                long: { units: '0', averagePrice: '0.00000', unrealizedPL: '0.00' },
+                short: { units: '0', averagePrice: '0.00000', unrealizedPL: '0.00' },
+                unrealizedPL: '0.00'
+            };
         }
 
-        res.json(data.positions);
-    } catch (error) {
-        res.status(500).json({ error: 'حدث خطأ أثناء جلب المراكز' });
-    }
+        const p = positionsMap[t.instrument];
+        const units = parseInt(t.currentUnits);
+        const pl = parseFloat(t.unrealizedPL);
+
+        if (units > 0) {
+            const currentLongUnits = parseInt(p.long.units);
+            const newUnits = currentLongUnits + units;
+            const avgPrice = ((parseFloat(p.long.averagePrice) * currentLongUnits) + (parseFloat(t.price) * units)) / newUnits;
+            p.long.units = newUnits.toString();
+            p.long.averagePrice = avgPrice.toFixed(5);
+            p.long.unrealizedPL = (parseFloat(p.long.unrealizedPL) + pl).toFixed(2);
+        } else {
+            const currentShortUnits = parseInt(p.short.units);
+            const newUnits = currentShortUnits + Math.abs(units);
+            const avgPrice = ((parseFloat(p.short.averagePrice) * currentShortUnits) + (parseFloat(t.price) * Math.abs(units))) / newUnits;
+            p.short.units = newUnits.toString();
+            p.short.averagePrice = avgPrice.toFixed(5);
+            p.short.unrealizedPL = (parseFloat(p.short.unrealizedPL) + pl).toFixed(2);
+        }
+        p.unrealizedPL = (parseFloat(p.unrealizedPL) + pl).toFixed(2);
+    });
+
+    res.json(Object.values(positionsMap));
 });
 
-// ========== API: Close Position ==========
-app.post('/api/positions/:instrument/close', async (req, res) => {
-    if (!OANDA_API_KEY || !OANDA_ACCOUNT_ID) {
-        return res.status(400).json({ error: 'لم يتم إعداد حساب OANDA على الخادم' });
-    }
-
-    const { instrument } = req.params;
-    const { longUnits, shortUnits } = req.body;
-
-    try {
-        const url = `${OANDA_BASE_URL}/v3/accounts/${OANDA_ACCOUNT_ID}/positions/${instrument}/close`;
-        const body = {};
-        if (longUnits) body.longUnits = longUnits;
-        if (shortUnits) body.shortUnits = shortUnits;
-
-        const response = await fetch(url, {
-            method: 'PUT',
-            headers: getOandaHeaders(),
-            body: JSON.stringify(body)
-        });
-        const data = await response.json();
-
-        if (!response.ok) {
-            return res.status(response.status).json({ error: handleOandaError(response, data) });
-        }
-
-        res.json(data);
-    } catch (error) {
-        res.status(500).json({ error: 'حدث خطأ أثناء إغلاق المركز' });
-    }
-});
-
-// ========== API: Trade History (Closed Trades) ==========
-app.get('/api/history', async (req, res) => {
-    if (!OANDA_API_KEY || !OANDA_ACCOUNT_ID) {
-        return res.status(400).json({ error: 'لم يتم إعداد حساب OANDA على الخادم' });
-    }
-
-    try {
-        const url = `${OANDA_BASE_URL}/v3/accounts/${OANDA_ACCOUNT_ID}/trades?state=CLOSED&count=50`;
-        const response = await fetch(url, { headers: getOandaHeaders() });
-        const data = await response.json();
-
-        if (!response.ok) {
-            return res.status(response.status).json({ error: handleOandaError(response, data) });
-        }
-
-        res.json(data.trades);
-    } catch (error) {
-        res.status(500).json({ error: 'حدث خطأ أثناء جلب تاريخ الصفقات' });
-    }
+// ========== API: History ==========
+app.get('/api/history', (req, res) => {
+    res.json(closedTrades.slice(-50)); // Last 50 closed trades
 });
 
 // ========== API: Check Available AI Models ==========
@@ -631,22 +631,6 @@ async function callGemini(apiKey, model, chatMessages) {
 
 // ========== SMC / ICT / Liquidity Analysis Engine ==========
 
-// Helper: fetch candles from OANDA
-async function fetchCandles(instrument, granularity, count) {
-    const url = `${OANDA_BASE_URL}/v3/instruments/${instrument}/candles?granularity=${granularity}&count=${count}&price=M`;
-    const response = await fetch(url, { headers: getOandaHeaders() });
-    if (!response.ok) return [];
-    const data = await response.json();
-    return (data.candles || []).filter(c => c.complete !== false).map(c => ({
-        time: c.time,
-        open: parseFloat(c.mid.o),
-        high: parseFloat(c.mid.h),
-        low: parseFloat(c.mid.l),
-        close: parseFloat(c.mid.c),
-        volume: c.volume || 0
-    }));
-}
-
 // Identify swing highs and swing lows (lookback of 3 candles each side)
 function findSwings(candles, lookback = 3) {
     const swingHighs = [];
@@ -749,7 +733,7 @@ function findOrderBlocks(candles) {
             }
         }
     }
-    return orderBlocks.slice(-6); // Return last 6 OBs
+    return orderBlocks.slice(-6);
 }
 
 // Find Fair Value Gaps (FVG / Imbalances)
@@ -880,7 +864,6 @@ function generateSignal(instrument, candles, htfStructure) {
     const bullishSweeps = sweeps.filter(s => s.type === 'buy_side_sweep');
     const bullishBOS = bosEvents.filter(b => b.type === 'bullish_bos');
 
-    // Bullish confluence check
     if (htfStructure === 'uptrend' || structure === 'uptrend') confluenceScore += 2;
     if (nearBullishOB.length > 0 || bullishOBs.length > 0) { confluenceScore += 2; confluence.push('السعر عند منطقة Order Block شرائي'); }
     if (bullishFVGs.length > 0) { confluenceScore += 1; confluence.push('وجود فجوة قيمة عادلة صعودية (Bullish FVG)'); }
@@ -904,25 +887,20 @@ function generateSignal(instrument, candles, htfStructure) {
     if (bearishBOS.length > 0) { bearishScore += 1; bearishConfluence.push('كسر هيكل هبوطي (Bearish BOS)'); }
     if (structure === 'downtrend') { bearishConfluence.push('الهيكل السوقي هابط (Lower Highs & Lower Lows)'); }
 
-    // Determine pip size based on instrument
     const isJPY = instrument.includes('JPY');
     const isXAU = instrument.includes('XAU');
     let pipMultiplier = isJPY ? 100 : (isXAU ? 10 : 10000);
     let pipSize = 1 / pipMultiplier;
 
-    // Determine the stronger direction
     const direction = confluenceScore >= bearishScore ? 'buy' : 'sell';
     const score = direction === 'buy' ? confluenceScore : bearishScore;
     const reasons = direction === 'buy' ? confluence : bearishConfluence;
 
-    // We need at least a minimum confluence for a signal
     if (score < 3) return null;
 
-    // Calculate SL and TP for 1:3 RR
     let entryPrice, stopLoss, takeProfit, orderType, entryReason;
 
     if (direction === 'buy') {
-        // Find the best SL: below the most recent swing low or OB low
         const recentSwingLow = swingLows.length > 0 ? swingLows[swingLows.length - 1].price : currentPrice * 0.998;
         const obLow = nearBullishOB.length > 0 ? nearBullishOB[0].low : (bullishOBs.length > 0 ? bullishOBs[bullishOBs.length - 1].low : recentSwingLow);
         stopLoss = Math.min(recentSwingLow, obLow) - (pipSize * 5);
@@ -930,7 +908,6 @@ function generateSignal(instrument, candles, htfStructure) {
         const slDistance = currentPrice - stopLoss;
         takeProfit = currentPrice + (slDistance * 3); // 1:3 RR
 
-        // If there's a nearby bullish OB below price, use pending order to enter at OB
         if (nearBullishOB.length > 0 && nearBullishOB[0].mid < currentPrice) {
             orderType = 'limit';
             entryPrice = nearBullishOB[0].mid;
@@ -944,7 +921,6 @@ function generateSignal(instrument, candles, htfStructure) {
             entryReason = 'دخول فوري بسعر السوق الحالي';
         }
     } else {
-        // Sell direction
         const recentSwingHigh = swingHighs.length > 0 ? swingHighs[swingHighs.length - 1].price : currentPrice * 1.002;
         const obHigh = nearBearishOB.length > 0 ? nearBearishOB[0].high : (bearishOBs.length > 0 ? bearishOBs[bearishOBs.length - 1].high : recentSwingHigh);
         stopLoss = Math.max(recentSwingHigh, obHigh) + (pipSize * 5);
@@ -966,7 +942,6 @@ function generateSignal(instrument, candles, htfStructure) {
         }
     }
 
-    // Determine strength label
     let strength;
     if (score >= 6) strength = 'قوية جداً';
     else if (score >= 4) strength = 'قوية';
@@ -1004,10 +979,6 @@ function generateSignal(instrument, candles, htfStructure) {
 
 // ========== API: Generate SMC/ICT Signals ==========
 app.get('/api/signals', async (req, res) => {
-    if (!OANDA_API_KEY || !OANDA_ACCOUNT_ID) {
-        return res.status(400).json({ error: 'لم يتم إعداد حساب OANDA على الخادم' });
-    }
-
     const instruments = (req.query.instruments || 'EUR_USD,GBP_USD,USD_JPY,XAU_USD').split(',');
 
     try {
@@ -1015,18 +986,14 @@ app.get('/api/signals', async (req, res) => {
 
         for (const instrument of instruments) {
             const trimmed = instrument.trim();
-
-            // Multi-timeframe: H4 for structure (HTF), H1 for entry (LTF)
-            const htfCandles = await fetchCandles(trimmed, 'H4', 100);
-            const ltfCandles = await fetchCandles(trimmed, 'H1', 100);
+            const htfCandles = await fetchYahooCandles(trimmed, 'H4', 100);
+            const ltfCandles = await fetchYahooCandles(trimmed, 'H1', 100);
 
             if (htfCandles.length < 30 || ltfCandles.length < 30) continue;
 
-            // Determine HTF structure
             const htfSwings = findSwings(htfCandles);
             const htfStructure = detectMarketStructure(htfSwings.swingHighs, htfSwings.swingLows);
 
-            // Generate signal on LTF with HTF context
             const signal = generateSignal(trimmed, ltfCandles, htfStructure);
             if (signal) {
                 signals.push(signal);
@@ -1054,7 +1021,7 @@ app.get('*', (req, res) => {
 // ========== Start Server ==========
 app.listen(PORT, () => {
     console.log(`\n🚀 AI Trading Platform running on port ${PORT}`);
-    console.log(`📡 OANDA Status: ${OANDA_API_KEY && OANDA_ACCOUNT_ID ? `✅ Connected (${OANDA_ENVIRONMENT})` : '❌ Disconnected'}`);
+    console.log(`📡 Status: ✅ Trading Simulation Engine Activated (Keyless Mode)`);
     console.log(`🤖 AI Models Status:`);
     const keys = getApiKeys();
     console.log(`   ChatGPT:  ${keys.openai ? '✅ Ready' : '❌ No API key'}`);
