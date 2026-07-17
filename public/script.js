@@ -656,6 +656,22 @@ async function handleSendChat() {
     if (welcome) welcome.remove();
 
     addChatMessage(text, 'user');
+    
+    // Construct contextual system prompt additions to help AI know current instrument & price
+    const currentBid = document.getElementById('bidPrice').textContent;
+    const currentAsk = document.getElementById('askPrice').textContent;
+    const currentSpread = document.getElementById('spreadVal').textContent;
+    const instrumentName = INSTRUMENT_DISPLAY[currentInstrument]?.name || currentInstrument;
+
+    // We build the message array to send to backend, inject system metadata as a system message if it's the first message, 
+    // or as a prompt enhancement helper for current context.
+    const apiMessages = [...messages];
+    apiMessages.push({ 
+        role: 'user', 
+        content: `[معلومات السوق الحالية للتداول: الزوج المختار حالياً بالرسم البياني هو ${instrumentName}، سعر البيع (Bid) الحالي: ${currentBid}، سعر الشراء (Ask) الحالي: ${currentAsk}، الفارق (Spread) الحالي: ${currentSpread} نقاط. يرجى أخذ هذا بعين الاعتبار والرد استناداً إليه كبيانات حية ومباشرة إذا طلب المستخدم أو سأل عن السعر أو التحليل].\n\nالسؤال/الطلب: ${text}` 
+    });
+
+    // Save the clean message version in local state history so the UI doesn't display the system inject code
     messages.push({ role: 'user', content: text });
 
     input.value = '';
@@ -670,7 +686,7 @@ async function handleSendChat() {
         const response = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ model: chatModel, messages: messages })
+            body: JSON.stringify({ model: chatModel, messages: apiMessages })
         });
 
         const data = await response.json();
