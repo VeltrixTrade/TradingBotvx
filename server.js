@@ -109,12 +109,16 @@ async function callOpenAICompatible(apiUrl, apiKey, model, chatMessages) {
 
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        const errMsg = errorData.error?.message || '';
+        
         if (response.status === 401) {
             throw new Error('مفتاح API غير صالح. يرجى التحقق من المتغيرات البيئية');
+        } else if (response.status === 402 || errMsg.toLowerCase().includes('insufficient') || errMsg.toLowerCase().includes('balance') || errMsg.toLowerCase().includes('quota')) {
+            throw new Error('رصيد الحساب غير كافٍ. يرجى شحن رصيد حساب API الخاص بهذا النموذج');
         } else if (response.status === 429) {
-            throw new Error('تم تجاوز حد الطلبات. يرجى المحاولة لاحقاً');
+            throw new Error('تم تجاوز حد الطلبات. يرجى المحاولة بعد قليل');
         } else {
-            throw new Error(errorData.error?.message || `خطأ في الخادم (${response.status})`);
+            throw new Error(errMsg || `خطأ في الخادم (${response.status})`);
         }
     }
 
