@@ -38,6 +38,7 @@
 
             <nav class="nav-links">
                 <a href="#" class="nav-link active" onclick="switchMainTab('dashboard')">لوحة التحكم</a>
+                <a href="#" class="nav-link" id="nav-signals-link" onclick="switchMainTab('signals')">التوصيات الذكية <span class="badge-new">SMC</span></a>
                 <a href="#positions-section" class="nav-link" onclick="switchMainTab('positions')">الصفقات والمراكز</a>
                 <a href="#history-section" class="nav-link" onclick="switchMainTab('history')">سجل التداول</a>
             </nav>
@@ -284,6 +285,35 @@
                         </div>
                     </div>
                 </div>
+        </div>
+
+        <!-- Smart Recommendations Section -->
+        <div class="signals-view-container" id="signalsView" style="display: none;">
+            <div class="signals-header">
+                <div class="signals-title-group">
+                    <span class="section-tag">تحليل SMC + ICT</span>
+                    <h2>التوصيات والتحليل الفني الذكي</h2>
+                    <p>توصيات تداول آلية مولدة بالخوارزميات بناءً على تدفقات السيولة، مناطق الـ Order Blocks والفجوات السعرية FVGs مع نسبة عائد للمخاطرة 1:3.</p>
+                </div>
+                <button class="btn btn-secondary" id="btnRefreshSignals" onclick="loadSmartSignals()">
+                    <span>تحديث التحليل</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                </button>
+            </div>
+
+            <!-- Loading indicator -->
+            <div class="signals-loading" id="signalsLoading">
+                <div class="loader-spinner"></div>
+                <p>جاري سحب شموع OANDA وتحليل هيكل السوق والسيولة...</p>
+            </div>
+
+            <!-- Signals Grid -->
+            <div class="signals-grid" id="signalsGrid" style="display: none;">
+                <!-- Dynamically populated via JS -->
+            </div>
+            
+            <div class="no-signals-message" id="noSignalsMessage" style="display: none;">
+                <p>لا توجد توصيات كافية لتأكيد الدخول حالياً وفق معايير SMC/ICT الصارمة. يرجى إعادة المحاولة لاحقاً.</p>
             </div>
         </div>
     </main>

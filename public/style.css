@@ -1114,3 +1114,397 @@ body {
         grid-template-columns: 1fr;
     }
 }
+
+/* ========== Smart Recommendations View Styles ========== */
+.badge-new {
+    background: var(--accent-gradient);
+    color: white;
+    font-size: 0.65rem;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 800;
+    margin-right: 4px;
+    letter-spacing: 0.5px;
+    box-shadow: 0 0 6px rgba(168, 85, 247, 0.4);
+}
+
+.signals-view-container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    animation: fadeIn 0.4s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.signals-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    padding: 24px;
+    border-radius: var(--radius-lg);
+    backdrop-filter: blur(12px);
+    gap: 20px;
+}
+
+.signals-title-group h2 {
+    font-size: 1.5rem;
+    font-weight: 800;
+    margin: 6px 0;
+    background: var(--accent-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.signals-title-group p {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    max-width: 800px;
+}
+
+.section-tag {
+    background: rgba(99, 102, 241, 0.1);
+    color: var(--accent-primary);
+    border: 1px solid rgba(99, 102, 241, 0.2);
+    padding: 4px 10px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    border-radius: var(--radius-full);
+    display: inline-block;
+}
+
+.btn-secondary {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    padding: 10px 20px;
+    border-radius: var(--radius-md);
+    font-family: var(--font-ar);
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all var(--transition-normal);
+}
+
+.btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: var(--border-hover);
+    transform: translateY(-1px);
+}
+
+.signals-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 20px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    text-align: center;
+    gap: 16px;
+}
+
+.loader-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid rgba(99, 102, 241, 0.1);
+    border-radius: 50%;
+    border-top-color: var(--accent-primary);
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.signals-loading p {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.signals-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    gap: 20px;
+}
+
+.signal-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    position: relative;
+    overflow: hidden;
+    backdrop-filter: blur(12px);
+    transition: all var(--transition-normal);
+}
+
+.signal-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-lg);
+}
+
+/* Card Direction Accents */
+.signal-card.buy-signal {
+    border-top: 4px solid var(--buy-color);
+}
+
+.signal-card.sell-signal {
+    border-top: 4px solid var(--sell-color);
+}
+
+.signal-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.signal-card-header h3 {
+    font-size: 1.3rem;
+    font-weight: 700;
+    font-family: var(--font-en);
+}
+
+.signal-direction-badge {
+    padding: 4px 12px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    border-radius: var(--radius-full);
+}
+
+.buy-signal .signal-direction-badge {
+    background: var(--buy-bg);
+    color: var(--buy-color);
+    border: 1px solid var(--buy-border);
+}
+
+.sell-signal .signal-direction-badge {
+    background: var(--sell-bg);
+    color: var(--sell-color);
+    border: 1px solid var(--sell-border);
+}
+
+.signal-meta-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.meta-pill {
+    font-size: 0.7rem;
+    padding: 3px 8px;
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+}
+
+.meta-pill strong {
+    color: var(--text-primary);
+}
+
+.meta-pill.strength-badge {
+    font-weight: 700;
+}
+
+.buy-signal .meta-pill.strength-badge {
+    color: var(--buy-color);
+    background: rgba(34, 197, 94, 0.05);
+    border-color: rgba(34, 197, 94, 0.15);
+}
+
+.sell-signal .meta-pill.strength-badge {
+    color: var(--sell-color);
+    background: rgba(239, 68, 68, 0.05);
+    border-color: rgba(239, 68, 68, 0.15);
+}
+
+.signal-parameters-box {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 16px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    text-align: center;
+}
+
+.param-col {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.param-title {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.param-value {
+    font-size: 1.05rem;
+    font-weight: 700;
+    font-family: var(--font-en);
+    direction: ltr;
+}
+
+.param-col.entry .param-value {
+    color: var(--text-primary);
+}
+
+.param-col.sl .param-value {
+    color: var(--sell-color);
+}
+
+.param-col.tp .param-value {
+    color: var(--buy-color);
+}
+
+.signal-confluences {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.confluence-title {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+}
+
+.confluence-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.confluence-item {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.confluence-item::before {
+    content: "✓";
+    color: var(--buy-color);
+    font-weight: 700;
+}
+
+.sell-signal .confluence-item::before {
+    color: var(--sell-color);
+}
+
+.liquidity-alerts-box {
+    background: rgba(234, 179, 8, 0.03);
+    border: 1px solid rgba(234, 179, 8, 0.1);
+    border-radius: var(--radius-md);
+    padding: 10px 12px;
+    font-size: 0.7rem;
+    color: var(--warning);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.liquidity-alert-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.liquidity-alert-item::before {
+    content: "⚠️";
+}
+
+.execute-signal-card-box {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: auto;
+}
+
+.units-select-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.75rem;
+}
+
+.units-select-row label {
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.units-select-row input {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    padding: 6px;
+    font-family: var(--font-en);
+    font-size: 0.8rem;
+    width: 100%;
+}
+
+.execute-signal-btn {
+    width: 100%;
+    border: none;
+    border-radius: var(--radius-md);
+    color: white;
+    font-family: var(--font-ar);
+    font-size: 0.85rem;
+    font-weight: 700;
+    padding: 12px;
+    cursor: pointer;
+    transition: all var(--transition-normal);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.buy-signal .execute-signal-btn {
+    background: var(--buy-color);
+    box-shadow: 0 4px 12px rgba(34, 197, 94, 0.2);
+}
+
+.buy-signal .execute-signal-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(34, 197, 94, 0.3);
+}
+
+.sell-signal .execute-signal-btn {
+    background: var(--sell-color);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
+}
+
+.sell-signal .execute-signal-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(239, 68, 68, 0.3);
+}
+
+.no-signals-message {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 40px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+

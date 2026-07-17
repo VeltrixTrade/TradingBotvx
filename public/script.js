@@ -513,20 +513,193 @@ async function loadTradeHistory() {
 function switchMainTab(tab) {
     document.querySelectorAll('.nav-link').forEach(link => {
         link.classList.remove('active');
-        if (link.getAttribute('onclick').includes(tab)) {
+        if (link.id === 'nav-signals-link' && tab === 'signals') {
+            link.classList.add('active');
+        } else if (link.getAttribute('onclick') && link.getAttribute('onclick').includes(tab)) {
             link.classList.add('active');
         }
     });
 
-    // Easy scroll to section on click
-    if (tab === 'positions') {
-        document.querySelector('.tables-container-card').scrollIntoView({ behavior: 'smooth' });
-        document.querySelector('.tab-btn[data-tab="open-trades"]').click();
-    } else if (tab === 'history') {
-        document.querySelector('.tables-container-card').scrollIntoView({ behavior: 'smooth' });
-        document.querySelector('.tab-btn[data-tab="trade-history"]').click();
-    } else if (tab === 'dashboard') {
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+    const dashboardGrid = document.querySelector('.dashboard-grid');
+    const signalsView = document.getElementById('signalsView');
+
+    if (tab === 'signals') {
+        dashboardGrid.style.display = 'none';
+        signalsView.style.display = 'block';
+        loadSmartSignals();
+    } else {
+        dashboardGrid.style.display = 'grid';
+        signalsView.style.display = 'none';
+
+        // Scroll or click subtabs inside the main dashboard
+        if (tab === 'positions') {
+            document.querySelector('.tables-container-card').scrollIntoView({ behavior: 'smooth' });
+            document.querySelector('.tab-btn[data-tab="open-trades"]').click();
+        } else if (tab === 'history') {
+            document.querySelector('.tables-container-card').scrollIntoView({ behavior: 'smooth' });
+            document.querySelector('.tab-btn[data-tab="trade-history"]').click();
+        } else if (tab === 'dashboard') {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    }
+}
+
+// ========== SMC / ICT Signals Loader ==========
+async function loadSmartSignals() {
+    const loading = document.getElementById('signalsLoading');
+    const grid = document.getElementById('signalsGrid');
+    const noSignals = document.getElementById('noSignalsMessage');
+
+    loading.style.display = 'flex';
+    grid.style.display = 'none';
+    noSignals.style.display = 'none';
+
+    try {
+        const response = await fetch('/api/signals');
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.error || 'فشل جلب التوصيات والتحليل');
+        }
+        const data = await response.json();
+        const signals = data.signals;
+
+        if (!signals || signals.length === 0) {
+            loading.style.display = 'none';
+            noSignals.innerHTML = `<p>لا توجد توصيات كافية لتأكيد الدخول حالياً وفق معايير SMC/ICT الصارمة. يرجى إعادة المحاولة لاحقاً.</p>`;
+            noSignals.style.display = 'block';
+            return;
+        }
+
+        let html = '';
+        signals.forEach((sig, idx) => {
+            const cardId = `sig-card-${idx}`;
+            const directionClass = sig.direction === 'buy' ? 'buy-signal' : 'sell-signal';
+            
+            // Build confluences list
+            let confHtml = '';
+            sig.reasons.forEach(reason => {
+                confHtml += `<li class="confluence-item">${reason}</li>`;
+            });
+
+            // Build liquidity alerts
+            let liqHtml = '';
+            if (sig.liquidityPools && sig.liquidityPools.length > 0) {
+                liqHtml += `<div class="liquidity-alerts-box"><span class="confluence-title">تنبيهات السيولة:</span>`;
+                sig.liquidityPools.forEach(pool => {
+                    liqHtml += `<div class="liquidity-alert-item">${pool.description} عند ${pool.level.toFixed(5)}</div>`;
+                });
+                liqHtml += `</div>`;
+            }
+
+            html += `
+                <div class="signal-card ${directionClass}" id="${cardId}">
+                    <div class="signal-card-header">
+                        <h3>${sig.instrumentDisplay}</h3>
+                        <span class="signal-direction-badge">${sig.directionLabel}</span>
+                    </div>
+
+                    <div class="signal-meta-row">
+                        <span class="meta-pill">النوع: <strong>${sig.orderTypeLabel}</strong></span>
+                        <span class="meta-pill strength-badge">القوة: <strong>${sig.strength}</strong></span>
+                        <span class="meta-pill">عائد/مخاطرة: <strong>${sig.riskReward}</strong></span>
+                    </div>
+
+                    <div class="signal-parameters-box">
+                        <div class="param-col entry">
+                            <span class="param-title">سعر الدخول</span>
+                            <span class="param-value">${sig.entryPrice}</span>
+                        </div>
+                        <div class="param-col sl">
+                            <span class="param-title">وقف الخسارة (SL)</span>
+                            <span class="param-value">${sig.stopLoss}</span>
+                        </div>
+                        <div class="param-col tp">
+                            <span class="param-title">جني الأرباح (TP)</span>
+                            <span class="param-value">${sig.takeProfit}</span>
+                        </div>
+                    </div>
+
+                    <div class="signal-confluences">
+                        <span class="confluence-title">مؤشرات SMC + ICT لتأكيد الدخول:</span>
+                        <ul class="confluence-list">
+                            ${confHtml}
+                        </ul>
+                    </div>
+
+                    ${liqHtml}
+
+                    <div class="execute-signal-card-box">
+                        <div class="units-select-row">
+                            <label for="units-${cardId}">كمية العقد (وحدات):</label>
+                            <input type="number" id="units-${cardId}" value="1000" min="1" step="1">
+                        </div>
+                        <button class="execute-signal-btn" onclick="executeSignalOrder('${sig.instrument}', '${sig.direction}', ${sig.entryPrice}, ${sig.stopLoss}, ${sig.takeProfit}, '${sig.orderType}', '${cardId}')">
+                            <span>تنفيذ هذه التوصية فوراً</span>
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+
+        grid.innerHTML = html;
+        loading.style.display = 'none';
+        grid.style.display = 'grid';
+
+    } catch (error) {
+        loading.style.display = 'none';
+        noSignals.innerHTML = `<p>فشل جلب التحليل الفني: ${error.message}</p>`;
+        noSignals.style.display = 'block';
+        showToast(error.message, 'error');
+    }
+}
+
+// ========== Execute SMC/ICT Recommendation directly ==========
+async function executeSignalOrder(instrument, direction, entryPrice, stopLoss, takeProfit, orderType, cardId) {
+    const unitsInput = document.getElementById(`units-${cardId}`);
+    let units = parseInt(unitsInput.value);
+
+    if (isNaN(units) || units <= 0) {
+        showToast('يرجى تحديد كمية صحيحة.', 'error');
+        return;
+    }
+
+    if (direction === 'sell') {
+        units = -units;
+    }
+
+    const orderBody = {
+        type: orderType,
+        instrument: instrument,
+        units: units,
+        stopLoss: stopLoss,
+        takeProfit: takeProfit
+    };
+
+    if (orderType !== 'market') {
+        orderBody.price = entryPrice;
+    }
+
+    showToast('جاري إرسال وتنفيذ أمر التوصية...', 'info');
+
+    try {
+        const response = await fetch('/api/orders', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(orderBody)
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'فشل تنفيذ الأمر');
+        }
+
+        showToast('تم تنفيذ صفقة التوصية بنجاح! ✓', 'success');
+        refreshAccountInfo();
+        refreshOpenTrades();
+        refreshPendingOrders();
+    } catch (error) {
+        showToast(error.message, 'error');
     }
 }
 
