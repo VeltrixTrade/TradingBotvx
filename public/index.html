@@ -41,7 +41,6 @@
                 <a href="#hero" class="nav-link active">الرئيسية</a>
                 <a href="#features" class="nav-link">المميزات</a>
                 <a href="#models" class="nav-link">النماذج</a>
-                <a href="#settings-section" class="nav-link">الإعدادات</a>
             </div>
             <button class="nav-cta" id="openChatBtn">
                 <span>ابدأ المحادثة</span>
@@ -73,12 +72,6 @@
                         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
                     </svg>
                     <span>ابدأ الدردشة الآن</span>
-                </button>
-                <button class="btn btn-secondary" id="heroSettings">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-                    </svg>
-                    <span>إعداد المفاتيح</span>
                 </button>
             </div>
             <div class="hero-models">
@@ -216,6 +209,7 @@
                         <li>كتابة إبداعية</li>
                         <li>دعم متعدد اللغات</li>
                     </ul>
+                    <div class="model-status-badge" id="status-chatgpt">⏳ جاري الفحص...</div>
                 </div>
                 <div class="model-card" id="model-gemini">
                     <div class="model-card-glow gemini-glow"></div>
@@ -230,6 +224,7 @@
                         <li>تحليل بيانات</li>
                         <li>مهام برمجية</li>
                     </ul>
+                    <div class="model-status-badge" id="status-gemini">⏳ جاري الفحص...</div>
                 </div>
                 <div class="model-card" id="model-deepseek">
                     <div class="model-card-glow deepseek-glow"></div>
@@ -244,87 +239,13 @@
                         <li>تحليل منطقي دقيق</li>
                         <li>أداء مميز بالسعر</li>
                     </ul>
+                    <div class="model-status-badge" id="status-deepseek">⏳ جاري الفحص...</div>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- Settings Section -->
-    <section class="settings-section" id="settings-section">
-        <div class="section-container">
-            <div class="section-header">
-                <span class="section-tag">الإعدادات</span>
-                <h2 class="section-title">إعداد مفاتيح API</h2>
-                <p class="section-desc">أدخل مفاتيح API الخاصة بك لبدء استخدام النماذج - تُحفظ محلياً بأمان</p>
-            </div>
-            <div class="settings-grid">
-                <div class="setting-card" id="setting-openai">
-                    <div class="setting-header">
-                        <div class="setting-icon chatgpt-bg">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="white"><path d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.985 5.985 0 0 0-3.998 2.9 6.046 6.046 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073zM13.26 22.43a4.476 4.476 0 0 1-2.876-1.04l.141-.081 4.779-2.758a.795.795 0 0 0 .392-.681v-6.737l2.02 1.168a.071.071 0 0 1 .038.052v5.583a4.504 4.504 0 0 1-4.494 4.494z"/></svg>
-                        </div>
-                        <div>
-                            <h3>OpenAI (ChatGPT)</h3>
-                            <p>مفتاح API من platform.openai.com</p>
-                        </div>
-                    </div>
-                    <div class="setting-input-group">
-                        <input type="password" id="openaiKey" placeholder="sk-..." class="setting-input" autocomplete="off">
-                        <button class="toggle-visibility" onclick="toggleKeyVisibility('openaiKey', this)" aria-label="إظهار/إخفاء المفتاح">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                        </button>
-                    </div>
-                    <div class="key-status" id="openaiStatus"></div>
-                </div>
-                <div class="setting-card" id="setting-gemini">
-                    <div class="setting-header">
-                        <div class="setting-icon gemini-bg">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="white"><path d="M12 0C5.372 0 0 5.372 0 12s5.372 12 12 12 12-5.372 12-12S18.628 0 12 0zm0 2.4a9.6 9.6 0 0 1 9.6 9.6c0 5.302-4.298 9.6-9.6 9.6S2.4 17.302 2.4 12 6.698 2.4 12 2.4z"/></svg>
-                        </div>
-                        <div>
-                            <h3>Google (Gemini)</h3>
-                            <p>مفتاح API من aistudio.google.com</p>
-                        </div>
-                    </div>
-                    <div class="setting-input-group">
-                        <input type="password" id="geminiKey" placeholder="AIza..." class="setting-input" autocomplete="off">
-                        <button class="toggle-visibility" onclick="toggleKeyVisibility('geminiKey', this)" aria-label="إظهار/إخفاء المفتاح">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                        </button>
-                    </div>
-                    <div class="key-status" id="geminiStatus"></div>
-                </div>
-                <div class="setting-card" id="setting-deepseek">
-                    <div class="setting-header">
-                        <div class="setting-icon deepseek-bg">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="white"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93z"/></svg>
-                        </div>
-                        <div>
-                            <h3>DeepSeek</h3>
-                            <p>مفتاح API من platform.deepseek.com</p>
-                        </div>
-                    </div>
-                    <div class="setting-input-group">
-                        <input type="password" id="deepseekKey" placeholder="sk-..." class="setting-input" autocomplete="off">
-                        <button class="toggle-visibility" onclick="toggleKeyVisibility('deepseekKey', this)" aria-label="إظهار/إخفاء المفتاح">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                        </button>
-                    </div>
-                    <div class="key-status" id="deepseekStatus"></div>
-                </div>
-            </div>
-            <div class="settings-actions">
-                <button class="btn btn-primary" id="saveKeysBtn" onclick="saveApiKeys()">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-                    <span>حفظ المفاتيح</span>
-                </button>
-                <button class="btn btn-ghost" onclick="clearApiKeys()">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                    <span>مسح الكل</span>
-                </button>
-            </div>
-        </div>
-    </section>
+
 
     <!-- Footer -->
     <footer class="footer">

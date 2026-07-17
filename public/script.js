@@ -3,29 +3,21 @@ let currentModel = 'chatgpt';
 let chatOpen = false;
 let messages = [];
 let isStreaming = false;
+let availableModels = {};
 
-const MODEL_CONFIG = {
+const MODEL_DISPLAY = {
     chatgpt: {
         name: 'ChatGPT',
-        apiUrl: 'https://api.openai.com/v1/chat/completions',
-        model: 'gpt-4o',
-        keyId: 'openaiKey',
         color: '#10a37f',
         gradient: 'linear-gradient(135deg, #10a37f, #1a7f5a)',
     },
     gemini: {
         name: 'Gemini',
-        apiUrl: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent',
-        model: 'gemini-2.0-flash',
-        keyId: 'geminiKey',
         color: '#4285f4',
         gradient: 'linear-gradient(135deg, #4285f4, #6c47ff)',
     },
     deepseek: {
         name: 'DeepSeek',
-        apiUrl: 'https://api.deepseek.com/chat/completions',
-        model: 'deepseek-chat',
-        keyId: 'deepseekKey',
         color: '#536dfe',
         gradient: 'linear-gradient(135deg, #536dfe, #304ffe)',
     }
@@ -44,11 +36,54 @@ const welcomeMessage = document.getElementById('welcomeMessage');
 
 // ========== Initialize ==========
 document.addEventListener('DOMContentLoaded', () => {
-    loadApiKeys();
+    checkAvailableModels();
     setupEventListeners();
     setupNavScroll();
     setupIntersectionObserver();
 });
+
+// ========== Check Available Models from Server ==========
+async function checkAvailableModels() {
+    try {
+        const response = await fetch('/api/models');
+        availableModels = await response.json();
+
+        // Update UI to show which models are available
+        Object.keys(availableModels).forEach(model => {
+            const tab = document.getElementById(`tab-${model}`);
+            if (tab) {
+                if (availableModels[model].available) {
+                    tab.classList.add('model-available');
+                    tab.title = `${MODEL_DISPLAY[model].name} - جاهز ✓`;
+                } else {
+                    tab.classList.add('model-unavailable');
+                    tab.title = `${MODEL_DISPLAY[model].name} - غير مُعد`;
+                }
+            }
+
+            // Update model cards status indicators
+            const statusEl = document.getElementById(`status-${model}`);
+            if (statusEl) {
+                if (availableModels[model].available) {
+                    statusEl.textContent = '✅ متصل وجاهز';
+                    statusEl.className = 'model-status-badge available';
+                } else {
+                    statusEl.textContent = '⚠️ غير مُعد';
+                    statusEl.className = 'model-status-badge unavailable';
+                }
+            }
+        });
+
+        // Auto-select first available model
+        const firstAvailable = Object.keys(availableModels).find(m => availableModels[m].available);
+        if (firstAvailable) {
+            switchModel(firstAvailable);
+        }
+
+    } catch (error) {
+        console.error('Failed to check models:', error);
+    }
+}
 
 // ========== Event Listeners ==========
 function setupEventListeners() {
@@ -58,9 +93,6 @@ function setupEventListeners() {
     // Open chat buttons
     document.getElementById('openChatBtn').addEventListener('click', openChat);
     document.getElementById('heroStartChat').addEventListener('click', openChat);
-    document.getElementById('heroSettings').addEventListener('click', () => {
-        document.getElementById('settings-section').scrollIntoView({ behavior: 'smooth' });
-    });
 
     // Close chat
     document.getElementById('closeChatBtn').addEventListener('click', closeChat);
@@ -123,7 +155,7 @@ function setupIntersectionObserver() {
         });
     }, { threshold: 0.1 });
 
-    document.querySelectorAll('.feature-card, .model-card, .setting-card').forEach(card => {
+    document.querySelectorAll('.feature-card, .model-card').forEach(card => {
         card.style.opacity = '0';
         card.style.transform = 'translateY(24px)';
         observer.observe(card);
@@ -151,15 +183,31 @@ function closeChat() {
 function clearChat() {
     messages = [];
     chatMessages.innerHTML = '';
-    chatMessages.appendChild(welcomeMessage.cloneNode(true));
-    document.getElementById('welcomeMessage')?.remove();
+    // Re-create welcome message
+    chatMessages.innerHTML = `
+        <div class="welcome-message" id="welcomeMessage">
+            <div class="welcome-icon">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="url(#welcomeGrad)" stroke-width="1.5">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                    <defs><linearGradient id="welcomeGrad" x1="3" y1="3" x2="21" y2="21"><stop offset="0%" stop-color="#6366f1"/><stop offset="100%" stop-color="#a855f7"/></linearGradient></defs>
+                </svg>
+            </div>
+            <h3>مرحباً! كيف يمكنني مساعدتك؟</h3>
+            <p>اختر نموذج الذكاء الاصطناعي وابدأ المحادثة</p>
+            <div class="welcome-suggestions">
+                <button class="suggestion-chip" onclick="sendSuggestion('اشرح لي الذكاء الاصطناعي بشكل مبسط')">🤖 اشرح لي الذكاء الاصطناعي</button>
+                <button class="suggestion-chip" onclick="sendSuggestion('اكتب لي كود بايثون لترتيب قائمة')">💻 اكتب لي كود بايثون</button>
+                <button class="suggestion-chip" onclick="sendSuggestion('ما هي أحدث التقنيات في 2026؟')">🚀 أحدث التقنيات</button>
+            </div>
+        </div>
+    `;
     chatStatus.textContent = 'جاهز للمحادثة';
 }
 
 // ========== Model Switching ==========
 function switchModel(model) {
     currentModel = model;
-    const config = MODEL_CONFIG[model];
+    const display = MODEL_DISPLAY[model];
 
     // Update tabs
     document.querySelectorAll('.model-tab').forEach(tab => {
@@ -167,75 +215,16 @@ function switchModel(model) {
     });
 
     // Update header
-    chatModelName.textContent = config.name;
-    chatHeaderAvatar.style.background = config.gradient;
-    chatStatus.textContent = 'جاهز للمحادثة';
-}
+    chatModelName.textContent = display.name;
+    chatHeaderAvatar.style.background = display.gradient;
 
-// ========== API Key Management ==========
-function loadApiKeys() {
-    Object.keys(MODEL_CONFIG).forEach(model => {
-        const key = localStorage.getItem(`ai_chat_${model}_key`);
-        if (key) {
-            document.getElementById(MODEL_CONFIG[model].keyId).value = key;
-            updateKeyStatus(model, true);
-        }
-    });
-}
-
-function saveApiKeys() {
-    let savedCount = 0;
-    Object.keys(MODEL_CONFIG).forEach(model => {
-        const input = document.getElementById(MODEL_CONFIG[model].keyId);
-        const key = input.value.trim();
-        if (key) {
-            localStorage.setItem(`ai_chat_${model}_key`, key);
-            updateKeyStatus(model, true);
-            savedCount++;
-        } else {
-            localStorage.removeItem(`ai_chat_${model}_key`);
-            updateKeyStatus(model, false);
-        }
-    });
-
-    if (savedCount > 0) {
-        showToast(`تم حفظ ${savedCount} مفتاح/مفاتيح بنجاح ✓`);
-    }
-}
-
-function clearApiKeys() {
-    Object.keys(MODEL_CONFIG).forEach(model => {
-        localStorage.removeItem(`ai_chat_${model}_key`);
-        document.getElementById(MODEL_CONFIG[model].keyId).value = '';
-        updateKeyStatus(model, false);
-    });
-    showToast('تم مسح جميع المفاتيح');
-}
-
-function updateKeyStatus(model, saved) {
-    const statusMap = {
-        chatgpt: 'openaiStatus',
-        gemini: 'geminiStatus',
-        deepseek: 'deepseekStatus'
-    };
-    const statusEl = document.getElementById(statusMap[model]);
-    if (saved) {
-        statusEl.textContent = '✓ المفتاح محفوظ';
-        statusEl.className = 'key-status saved';
+    // Check availability
+    if (availableModels[model] && !availableModels[model].available) {
+        chatStatus.textContent = '⚠️ هذا النموذج غير مُعد على الخادم';
+        chatStatus.style.color = '#f59e0b';
     } else {
-        statusEl.textContent = '';
-        statusEl.className = 'key-status';
-    }
-}
-
-function toggleKeyVisibility(inputId, btn) {
-    const input = document.getElementById(inputId);
-    if (input.type === 'password') {
-        input.type = 'text';
-        btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
-    } else {
-        input.type = 'password';
-        btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+        chatStatus.textContent = 'جاهز للمحادثة';
+        chatStatus.style.color = '';
     }
 }
 
@@ -288,12 +277,9 @@ async function handleSend() {
     const text = chatInput.value.trim();
     if (!text || isStreaming) return;
 
-    // Check API key
-    const config = MODEL_CONFIG[currentModel];
-    const apiKey = localStorage.getItem(`ai_chat_${currentModel}_key`);
-
-    if (!apiKey) {
-        addErrorMessage(`يرجى إضافة مفتاح API الخاص بـ ${config.name} في قسم الإعدادات أولاً`);
+    // Check if model is available
+    if (availableModels[currentModel] && !availableModels[currentModel].available) {
+        addErrorMessage(`نموذج ${MODEL_DISPLAY[currentModel].name} غير مُعد على الخادم. يرجى إضافة مفتاح API في المتغيرات البيئية.`);
         return;
     }
 
@@ -313,100 +299,38 @@ async function handleSend() {
     // Show loading
     const loadingEl = addLoadingMessage();
     chatStatus.textContent = 'يكتب...';
+    chatStatus.style.color = '';
     isStreaming = true;
 
     try {
-        let response;
-        if (currentModel === 'gemini') {
-            response = await callGeminiAPI(apiKey, messages);
-        } else {
-            response = await callOpenAICompatibleAPI(config, apiKey, messages);
+        const response = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                model: currentModel,
+                messages: messages
+            })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'حدث خطأ غير متوقع');
         }
 
         loadingEl.remove();
-        addMessage(response, 'ai');
-        messages.push({ role: 'assistant', content: response });
+        addMessage(data.response, 'ai');
+        messages.push({ role: 'assistant', content: data.response });
         chatStatus.textContent = 'جاهز للمحادثة';
+
     } catch (error) {
         loadingEl.remove();
-        addErrorMessage(error.message || 'حدث خطأ أثناء الاتصال بالنموذج');
+        addErrorMessage(error.message || 'حدث خطأ أثناء الاتصال بالخادم');
         chatStatus.textContent = 'حدث خطأ';
     } finally {
         isStreaming = false;
         sendBtn.disabled = !chatInput.value.trim();
     }
-}
-
-// ========== API Calls ==========
-async function callOpenAICompatibleAPI(config, apiKey, chatMessages) {
-    const response = await fetch(config.apiUrl, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-            model: config.model,
-            messages: chatMessages.map(m => ({
-                role: m.role,
-                content: m.content
-            })),
-            max_tokens: 2048,
-            temperature: 0.7
-        })
-    });
-
-    if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        if (response.status === 401) {
-            throw new Error('مفتاح API غير صالح. يرجى التحقق من المفتاح في الإعدادات');
-        } else if (response.status === 429) {
-            throw new Error('تم تجاوز حد الطلبات. يرجى المحاولة لاحقاً');
-        } else {
-            throw new Error(errorData.error?.message || `خطأ في الخادم (${response.status})`);
-        }
-    }
-
-    const data = await response.json();
-    return data.choices[0].message.content;
-}
-
-async function callGeminiAPI(apiKey, chatMessages) {
-    const url = `${MODEL_CONFIG.gemini.apiUrl}?key=${apiKey}`;
-
-    // Convert messages to Gemini format
-    const contents = chatMessages.map(m => ({
-        role: m.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: m.content }]
-    }));
-
-    const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            contents: contents,
-            generationConfig: {
-                temperature: 0.7,
-                maxOutputTokens: 2048
-            }
-        })
-    });
-
-    if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        if (response.status === 400) {
-            throw new Error('مفتاح API غير صالح أو طلب غير صحيح');
-        } else if (response.status === 429) {
-            throw new Error('تم تجاوز حد الطلبات. يرجى المحاولة لاحقاً');
-        } else {
-            throw new Error(errorData.error?.message || `خطأ في الخادم (${response.status})`);
-        }
-    }
-
-    const data = await response.json();
-    return data.candidates[0].content.parts[0].text;
 }
 
 // ========== UI Message Helpers ==========
@@ -416,7 +340,7 @@ function addMessage(text, sender) {
 
     const now = new Date();
     const time = now.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
-    const modelLabel = sender === 'ai' ? MODEL_CONFIG[currentModel].name : 'أنت';
+    const modelLabel = sender === 'ai' ? MODEL_DISPLAY[currentModel].name : 'أنت';
 
     messageEl.innerHTML = `
         <div class="message-bubble">${escapeHtml(text)}</div>

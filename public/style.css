@@ -1404,3 +1404,42 @@ body {
         justify-content: center;
     }
 }
+
+/* ========== Model Status Badges ========== */
+.model-status-badge {
+    margin-top: 16px;
+    padding: 8px 16px;
+    border-radius: var(--radius-full);
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-align: center;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+    transition: all var(--transition-normal);
+}
+
+.model-status-badge.available {
+    background: rgba(34, 197, 94, 0.1);
+    border-color: rgba(34, 197, 94, 0.25);
+    color: var(--success);
+}
+
+.model-status-badge.unavailable {
+    background: rgba(245, 158, 11, 0.1);
+    border-color: rgba(245, 158, 11, 0.25);
+    color: var(--warning);
+}
+
+/* ========== Model Tab Availability ========== */
+.model-tab.model-available .tab-dot {
+    box-shadow: 0 0 8px currentColor;
+}
+
+.model-tab.model-unavailable {
+    opacity: 0.5;
+}
+
+.model-tab.model-unavailable .tab-dot {
+    background: var(--text-muted) !important;
+}
